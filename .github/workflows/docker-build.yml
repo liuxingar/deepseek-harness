@@ -33,7 +33,11 @@ jobs:
           git fetch upstream master
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git merge upstream/master --no-edit || (git merge --abort && echo "::warning::Merge conflict or already up-to-date; please sync manually")
+          git merge upstream/master --no-edit || (git merge --abort && echo "::warning::Merge conflict; please sync manually")
+          # 同步后自动删除上游自带的无关工作流，只保留 docker-build.yml
+          find .github/workflows -type f ! -name 'docker-build.yml' -delete 2>/dev/null || true
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: remove upstream workflows, keep only docker-build"
           git push || echo "Nothing to push"
 
       # 只构建 amd64（绝大多数 NAS 是 x86_64，构建快 3-5 分钟）
