@@ -26,24 +26,32 @@ jobs:
           ref: master
 
       # 仅在定时触发时自动同步上游；手动/push 触发不做同步
+      # 通过比较 merge 前后的 commit hash 判断是否有实际更新
       - name: Sync upstream (scheduled only)
+        id: sync
         if: github.event_name == 'schedule'
         run: |
           git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git || true
           git fetch upstream master
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BEFORE=$(git rev-parse HEAD)
           git merge upstream/master --no-edit || (git merge --abort && echo "::warning::Merge conflict; please sync manually")
-          # 同步后自动删除上游自带的无关工作流，只保留 docker-build.yml
-          find .github/workflows -type f ! -name 'docker-build.yml' -delete 2>/dev/null || true
-          git add -A
-          git diff --cached --quiet || git commit -m "chore: remove upstream workflows, keep only docker-build"
-          git push || echo "Nothing to push"
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" != "$AFTER" ]; then
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "New upstream commits detected, syncing..."
+            # 同步后自动删除上游自带的无关工作流，只保留 docker-build.yml
+            find .github/workflows -type f ! -name 'docker-build.yml' -delete 2>/dev/null || true
+            git add -A
+            git diff --cached --quiet || git commit -m "chore: remove upstream workflows, keep only docker-build"
+            git push || echo "Nothing to push"
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "No new upstream commits, skip."
+          fi
 
-      # 只构建 amd64（绝大多数 NAS 是 x86_64，构建快 3-5 分钟）
-      # 如果你的 NAS 是 ARM 架构，恢复下面两行，并把 platforms 加回 linux/arm64：
-      #   - name: Set up QEMU
-      #     uses: docker/setup-qemu-action@v3
+      # 只构建 amd64（群晖 NAS 是 x86_64，构建快 3-5 分钟）
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -55,6 +63,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -64,3 +73,26 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/deepseek-harness:latest
             ghcr.io/${{ github.repository_owner }}/deepseek-harness:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/deepseek-harness:${{ github.ref_name }}
+
+      # 仅在「定时同步 + 有实际上游更新 + 构建成功」时发送邮件通知
+      - name: Send email notification
+        if: github.event_name == 'schedule' && steps.sync.outputs.updated == 'true' && steps.build.outcome == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true
+          username: 1175864173@qq.com
+          password: ${{ secrets.QQ_MAIL_PASSWORD }}
+          subject: "DeepSeek Harness 镜像更新构建成功"
+          to: 1175864173@qq.com
+          from: "GitHub Actions"
+          body: |
+            上游 deepseek-ai/deepseek-harness 有新更新，已自动同步并构建成功。
+
+            镜像地址：ghcr.io/liuxingar/deepseek-harness:latest
+            Commit：${{ github.sha }}
+            构建详情：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            群晖上执行以下命令升级：
+            docker compose pull && docker compose up -d
