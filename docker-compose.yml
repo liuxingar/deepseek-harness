@@ -1,0 +1,28 @@
+# DeepSeek Harness NAS 部署（从 GHCR 拉镜像，无需本地构建）
+# 用法：docker compose up -d
+
+services:
+  dsh-web:
+    image: ghcr.io/liuxingar/deepseek-harness:latest
+    container_name: deepseek-harness
+    ports:
+      - "${DSH_PORT:-3080}:3080"
+    environment:
+      # DeepSeek API Key（必填）
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      # 可选：自定义 base URL（代理或自建 OpenAI 兼容模型时填）
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-}
+    volumes:
+      # agent 的工作区目录（NAS 上的真实路径，在 .env 的 DSH_WORKSPACE 里配置）
+      - "${DSH_WORKSPACE:-./workspace}:/workspace"
+      # 持久化会话数据（重建容器后对话记录不丢失）
+      - dsh-data:/app/.dsh-home
+    restart: unless-stopped
+    # 限制资源，防止失控
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+volumes:
+  dsh-data:

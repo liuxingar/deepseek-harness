@@ -1,0 +1,37 @@
+# 依赖和构建产物（容器内重新安装）
+node_modules
+lib
+dist
+apps/web/dist
+
+# Git 仓库（不需要进镜像，也避免泄露历史）
+.git
+.git*
+!.gitattributes
+
+# 敏感文件
+.env
+.env.*
+*.key
+*.pem
+
+# 日志和临时文件
+*.log
+pnpm-debug.log
+coverage
+tmp
+.sessions
+.storages
+.cache
+
+# IDE 和系统文件
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docker 自身（避免递归）
+Dockerfile
+docker-compose.yml
+
+# 保留 docker-patch.yml（容器内需要它）
