@@ -1,0 +1,29 @@
+name: Test Email Notification
+
+# 临时测试工作流：手动触发，只发一封测试邮件，验证 QQ SMTP 配置
+on:
+  workflow_dispatch:
+
+jobs:
+  test-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send test email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true
+          username: 1175864173@qq.com
+          password: ${{ secrets.QQ_MAIL_PASSWORD }}
+          subject: "测试邮件 - DeepSeek Harness 镜像更新通知"
+          to: 1175864173@qq.com
+          from: "GitHub Actions"
+          body: |
+            这是一封测试邮件。
+
+            如果你收到了这封邮件，说明 QQ 邮箱 SMTP 配置正确，
+            DeepSeek Harness 的邮件通知功能可以正常工作。
+
+            以后每天北京时间 11:00 自动同步上游时，
+            如果有更新且构建成功，你会收到类似的通知邮件。
