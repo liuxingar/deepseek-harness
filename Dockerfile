@@ -19,6 +19,14 @@ WORKDIR /app
 # 复制全部源码（.dockerignore 控制排除项）
 COPY . .
 
+# 构建脚本 scripts/build.ts 会调用 git rev-parse HEAD 获取 commit hash 注入前端版本信息，
+# 但 .dockerignore 排除了 .git 目录，导致容器内无 git 仓库而构建失败。
+# 这里初始化一个临时 git 仓库并创建一个空 commit，使 git rev-parse HEAD 能返回 hash。
+RUN git init && \
+    git config user.email "build@local" && \
+    git config user.name "build" && \
+    git commit --allow-empty -m "snapshot"
+
 # 安装依赖 + 构建
 RUN pnpm install --frozen-lockfile && pnpm run build
 
