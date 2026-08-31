@@ -55,9 +55,10 @@ USER dsh
 # Web UI 默认端口
 EXPOSE 3080
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3080').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))"
+# 健康检查：只要求服务有 HTTP 响应即可（dsh web 根路径需要 token 才返回 2xx，
+# 无 token 会返回 401/404，但说明服务在运行，视为健康）
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3080').catch(()=>process.exit(1))"
 
 # 启动命令：--patch 让 Web UI 监听 0.0.0.0，局域网才能访问
 CMD ["pnpm", "dsh", "web", "--patch", "/app/docker-patch.yml"]
