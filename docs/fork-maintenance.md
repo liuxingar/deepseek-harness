@@ -30,6 +30,7 @@ bash scripts/sync-upstream.sh
 | `README-docker-setup.md` | 部署说明 |
 | `scripts/sync-upstream.sh` | 同步上游脚本 |
 | `scripts/apply-lan-settings-patch.py` | 构建时给官方源码打补丁（局域网 settings 修复） |
+| `entrypoint.sh` | 容器入口：启动时自动修正挂载卷属主（解决 NAS bind mount 目录 EACCES），再降权到 dsh 用户运行 |
 | `docs/fork-maintenance.md` | 本文档 |
 
 ### 删除的官方文件（用户要求去掉无关构建）
@@ -53,5 +54,12 @@ bash scripts/sync-upstream.sh
 
 1. `docker-patch.yml` 存在，且 `!!js` 表达式是**双引号标量**（不是 flow 序列，否则启动失败）
 2. 官方源码 `ui-settings/index.ts` 保持原样（含 `isLoopback` 原逻辑），由构建时脚本注入修复
-3. `Dockerfile` 包含 `RUN python3 scripts/apply-lan-settings-patch.py`
+3. `Dockerfile` 包含 `RUN python3 scripts/apply-lan-settings-patch.py` 和 `ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]`
 4. `.github/workflows/docker-build.yml` 存在（唯一保留的 CI）
+
+## 群晖部署常见问题
+
+### EACCES: permission denied, mkdir '/app/.dsh/profiles/web'（容器崩溃重启）
+原因：NAS 上挂载到 `/app/.dsh` 的目录归 root 所有，容器内 dsh 用户无写权限。
+镜像已内置 `entrypoint.sh` 启动时自动 `chown` 修正，**新镜像无需手动处理**。
+若使用旧镜像，可手动执行：`chmod -R 777 <data目录> <workspace目录>` 后重建容器。

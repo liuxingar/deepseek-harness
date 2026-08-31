@@ -54,7 +54,9 @@ RUN groupadd -r dsh && useradd -r -g dsh -d /app dsh && \
     chown -R dsh:dsh /app && \
     mkdir -p /workspace && chown dsh:dsh /workspace
 
-USER dsh
+# 入口脚本：以 root 启动 → 修正挂载卷属主（NAS bind mount 会遮蔽镜像内 chown，
+# 导致 dsh 用户对 /app/.dsh 无写权限而 EACCES）→ 降权到 dsh 用户运行
+COPY entrypoint.sh /app/entrypoint.sh
 
 # Web UI 默认端口
 EXPOSE 3080
@@ -64,5 +66,6 @@ EXPOSE 3080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:3080').catch(()=>process.exit(1))"
 
-# 启动命令：--patch 让 Web UI 监听 0.0.0.0，局域网才能访问
-CMD ["pnpm", "dsh", "web", "--patch", "/app/docker-patch.yml"]
+# 入口脚本负责修正挂载卷权限并以 dsh 用户启动 dsh web
+# （--patch 让 Web UI 监听 0.0.0.0，局域网才能访问）
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
