@@ -53,9 +53,12 @@ export const inject = ['remote', 'remote.settings']
  */
 export function apply(ctx: Context): void {
   const schema = new SettingsSchemaService(ctx)
-  // Resolved once here, where `remote` is declared in this plugin's own
-  // `inject`; the binder hands the same answer to every scope it binds.
-  const persistence = ctx.remote.$host.isLoopback ? 'host' : 'memory'
+  // Docker/局域网部署：原逻辑按 isLoopback 选择持久化，通过非 loopback IP
+  // （如 192.168.50.100）访问时 settings 会降级为 memory 模式，导致模型设置/
+  // API key 配置页报 "settings are unavailable in this browser"。
+  // 这里强制使用 host 持久化，使局域网访问也能正常读写设置。
+  // 安全前提：dsh 已有 token 认证 + /api 信任围栏（trustedHosts）双重防护。
+  const persistence: 'host' | 'memory' = 'host'
   const mirror = new SettingsDescribeMirror(ctx, persistence)
   ctx.effect(() => {
     const disposers = [
