@@ -18,6 +18,10 @@ services:
       # dsh 数据目录（配置/模型设置/API key/会话历史）——必须与下方 volume 映射一致
       # dsh 默认 home 是 ~/.dsh，容器内用户 home 是 /app，故此处设为 /app/.dsh
       DSH_HOME: /app/.dsh
+      # 权限/沙箱模式：群晖 NAS 没有 bwrap/Landlock 沙箱后端，
+      # 保持 danger-full-access（无沙箱直接访问）即可；
+      # 若用 workspace-write 会报 "no sandbox backend is usable"
+      DSH_PERMISSION_MODE: ${DSH_PERMISSION_MODE:-danger-full-access}
     volumes:
       # agent 工作区（NAS 真实路径，在 .env 的 DSH_WORKSPACE 里配置）
       # 提示：dsh 通过 UI 目录选择器选工作目录，容器内请选择 /workspace
