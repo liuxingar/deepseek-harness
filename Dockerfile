@@ -34,6 +34,15 @@ RUN python3 scripts/apply-lan-settings-patch.py
 # 安装依赖 + 构建
 RUN pnpm install --frozen-lockfile && pnpm run build
 
+# 减小最终镜像体积：构建产物就绪后清理运行时不需要的内容
+# （测试/快照/文档/website 源码/sourcemap/缓存。dsh 用 tsx 跑源码，
+#  这些只在开发/测试用，删掉不影响运行，能显著减小 pull 下载量）
+RUN find /app -type d \( -name tests -o -name '__snapshots__' -o -name 'e2e' -o -name 'fixtures' \) -prune -exec rm -rf {} + ; \
+    find /app -type f \( -name '*.spec.ts' -o -name '*.test.ts' -o -name '*.e2e.ts' -o -name '*.map' \) -delete ; \
+    rm -rf /app/website /app/docs /app/.github ; \
+    find /app/node_modules -type d -name '.cache' -prune -exec rm -rf {} + ; \
+    true
+
 # ---- 运行阶段（更小的最终镜像）----
 FROM node:22-slim
 
@@ -44,15 +53,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends git && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# 只从 builder 阶段复制构建产物
-COPY --from=builder /app /app
-
-# 非 root 用户运行（安全加固）
+# 先创建 dsh 用户（COPY --chown 需要目标用户已存在）
 RUN groupadd -r dsh && useradd -r -g dsh -d /app dsh && \
-    chown -R dsh:dsh /app && \
     mkdir -p /workspace && chown dsh:dsh /workspace
+
+# 只从 builder 阶段复制构建产物；COPY 时直接设置属主为 dsh。
+# 注意：不能在 COPY 后再 chown -R /app——那会产生一个与 COPY 层
+# 几乎一样大的额外镜像层（每次 pull 都要下载两个大文件的原因）。
+WORKDIR /app
+COPY --from=builder --chown=dsh:dsh /app /app
 
 # 入口脚本：以 root 启动 → 修正挂载卷属主（NAS bind mount 会遮蔽镜像内 chown，
 # 导致 dsh 用户对 /app/.dsh 无写权限而 EACCES）→ 降权到 dsh 用户运行

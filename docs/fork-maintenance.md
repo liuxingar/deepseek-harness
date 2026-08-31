@@ -63,3 +63,9 @@ bash scripts/sync-upstream.sh
 原因：NAS 上挂载到 `/app/.dsh` 的目录归 root 所有，容器内 dsh 用户无写权限。
 镜像已内置 `entrypoint.sh` 启动时自动 `chown` 修正，**新镜像无需手动处理**。
 若使用旧镜像，可手动执行：`chmod -R 777 <data目录> <workspace目录>` 后重建容器。
+
+### pull 镜像很大 / 每次下载两个大文件
+镜像已做瘦身优化（`Dockerfile`）：
+1. `COPY --from=builder --chown=dsh:dsh /app /app` 替代"复制后再 `chown -R /app`"——后者会产生与 COPY 层几乎一样大的额外镜像层
+2. 构建后清理运行时不需要的内容（tests/快照/e2e/website/docs/sourcemap/缓存）
+同步官方后重建镜像体积明显变小，pull 更快。
