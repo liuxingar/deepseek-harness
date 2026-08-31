@@ -2,13 +2,19 @@
 # 1. webserver: 允许容器外（局域网）访问 Web UI
 # 2. connection: 把宿主机(群晖)的局域网 IP 加入 /api 信任围栏
 #    官方默认只信任 loopback + 容器内自动采样的 LAN IP(172.31.0.2)，
-#    浏览器从宿主机 IP(192.168.50.100) 访问时 Host 不在 trustedHosts 会被 403 拒绝。
-#    !!js 表达式保留官方动态注入并追加宿主机 IP。
-# 注意：如果群晖的局域网 IP 变化，需要同步修改下面的 IP 并重新构建
+#    浏览器从宿主机 IP 访问时 Host 不在 trustedHosts 会被 403 拒绝。
+#    这里从环境变量 DSH_TRUSTED_HOSTS 读取（在 .env / docker-compose 里配置），
+#    支持多个地址用英文逗号分隔，例如：192.168.50.100,192.168.50.101
+#    !!js 表达式保留官方动态注入并追加配置的地址。
 - id: webserver
   config:
     host: '0.0.0.0'
     port: 3080
 - id: connection
   config:
-    trustedHosts: !!js ['192.168.50.100', ...ctx.webRuntime.trustedHosts]
+    trustedHosts: !!js [
+      ...(process.env.DSH_TRUSTED_HOSTS
+        ? process.env.DSH_TRUSTED_HOSTS.split(',').map(s => s.trim()).filter(Boolean)
+        : []),
+      ...ctx.webRuntime.trustedHosts,
+    ]
