@@ -27,6 +27,10 @@ RUN git init && \
     git config user.name "build" && \
     git commit --allow-empty -m "snapshot"
 
+# 应用 fork 专属补丁：官方源码保持原样，仅在构建产物里注入局域网 settings 修复
+# （通过局域网 IP 访问时 settings 持久化强制为 host，否则模型设置页不可用）
+RUN python3 scripts/apply-lan-settings-patch.py
+
 # 安装依赖 + 构建
 RUN pnpm install --frozen-lockfile && pnpm run build
 
