@@ -5,16 +5,11 @@
 #    浏览器从宿主机 IP 访问时 Host 不在 trustedHosts 会被 403 拒绝。
 #    这里从环境变量 DSH_TRUSTED_HOSTS 读取（在 .env / docker-compose 里配置），
 #    支持多个地址用英文逗号分隔，例如：192.168.50.100,192.168.50.101
-#    !!js 表达式保留官方动态注入并追加配置的地址。
+#    注意：!!js 必须是"标量"，所以整个 JS 表达式用双引号包裹（不能以 [ 开头写成 flow 序列，否则解析失败）
 - id: webserver
   config:
     host: '0.0.0.0'
     port: 3080
 - id: connection
   config:
-    trustedHosts: !!js [
-      ...(process.env.DSH_TRUSTED_HOSTS
-        ? process.env.DSH_TRUSTED_HOSTS.split(',').map(s => s.trim()).filter(Boolean)
-        : []),
-      ...ctx.webRuntime.trustedHosts,
-    ]
+    trustedHosts: !!js "[...(process.env.DSH_TRUSTED_HOSTS || '').split(',').map(s => s.trim()).filter(Boolean), ...ctx.webRuntime.trustedHosts]"
