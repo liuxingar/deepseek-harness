@@ -36,7 +36,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BEFORE=$(git rev-parse HEAD)
-          git merge upstream/master --no-edit || (git merge --abort && echo "::warning::Merge conflict; please sync manually")
+          # 用 -X theirs：自动合并时若与官方冲突，取官方版本（我们坚持官方源码零改动，
+          # 冲突主要来自我们删除的官方 workflow 文件；合并后下面的 find 会再次清理掉它们）。
+          # 只有官方 workflow 的 modify/delete 冲突不会再导致 merge 中止。
+          git merge -X theirs upstream/master --no-edit || (git merge --abort && echo "::error::Merge conflict (non-workflow); please sync manually")
           AFTER=$(git rev-parse HEAD)
           if [ "$BEFORE" != "$AFTER" ]; then
             echo "updated=true" >> $GITHUB_OUTPUT
