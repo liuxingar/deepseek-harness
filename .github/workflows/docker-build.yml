@@ -36,10 +36,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BEFORE=$(git rev-parse HEAD)
-          # 用 -X theirs：自动合并时若与官方冲突，取官方版本（我们坚持官方源码零改动，
-          # 冲突主要来自我们删除的官方 workflow 文件；合并后下面的 find 会再次清理掉它们）。
-          # 只有官方 workflow 的 modify/delete 冲突不会再导致 merge 中止。
-          git merge -X theirs upstream/master --no-edit || (git merge --abort && echo "::error::Merge conflict (non-workflow); please sync manually")
+          # 自动合并官方更新。说明：
+          #  - 官方源码我们零改动，冲突只来自「我们删除了官方 workflow 文件、官方又修改了它们」
+          #    （modify/delete 冲突，-X theirs 无法自动解决）。
+          #  - 因此 merge 一旦失败，统一以官方版本（theirs）强制解决并提交；
+          #    合并完成后下方 find 会再次清理掉官方 workflow，只保留 docker-build.yml。
+          git merge -X theirs upstream/master --no-edit || {
+            echo "::warning::auto-resolving upstream conflicts with theirs (keeps upstream code)";
+            git checkout --theirs -- . 2>/dev/null || true;
+            git add -A;
+            git commit --no-edit || true;
+          }
           AFTER=$(git rev-parse HEAD)
           if [ "$BEFORE" != "$AFTER" ]; then
             echo "updated=true" >> $GITHUB_OUTPUT
