@@ -60,8 +60,11 @@ RUN groupadd -r dsh && useradd -r -g dsh -d /app dsh && \
 # 只从 builder 阶段复制构建产物；COPY 时直接设置属主为 dsh。
 # 注意：不能在 COPY 后再 chown -R /app——那会产生一个与 COPY 层
 # 几乎一样大的额外镜像层（每次 pull 都要下载两个大文件的原因）。
-WORKDIR /app
 COPY --from=builder --chown=dsh:dsh /app /app
+# 确保 /app 目录本身属主为 dsh（WORKDIR 会先以 root 创建目录，COPY --chown
+# 只改复制的文件属主，不改目录本身；单目录 chown 不递归，额外层可忽略）
+RUN chown dsh:dsh /app
+WORKDIR /app
 
 # 入口脚本：以 root 启动 → 修正挂载卷属主（NAS bind mount 会遮蔽镜像内 chown，
 # 导致 dsh 用户对 /app/.dsh 无写权限而 EACCES）→ 降权到 dsh 用户运行
