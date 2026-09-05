@@ -10,6 +10,12 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 make g++ git && \
     rm -rf /var/lib/apt/lists/*
 
+# 把 HOME 设为 /app，使 corepack 缓存（pnpm 二进制）和 pnpm store
+# 都落在 /app 下。这样运行阶段 COPY --from=builder /app /app 时会
+# 一并带过去，运行时 dsh 用户（HOME=/app）能直接找到，不需要重新
+# 下载，也不会触发运行时 pnpm install。
+ENV HOME=/app
+
 # 启用 corepack 并锁定 pnpm 版本
 # 注意：如果上游 package.json 的 packageManager 字段升级了 pnpm，需同步更新此行
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
