@@ -21,5 +21,9 @@ for dir in /app/.dsh /workspace; do
   fi
 done
 
-# 降权到 dsh 用户运行 dsh web（显式设置 HOME=/app，确保默认 home 解析为 /app/.dsh）
-exec su -s /bin/sh dsh -c "export HOME=/app && cd /app && exec pnpm dsh web --patch /app/docker-patch.yml"
+# 直接用 node 启动 dsh web，绕过 pnpm。
+# package.json 里 "dsh": "node --import tsx/esm apps/cli/src/bin.ts"，
+# 直接用 node 跑完全等价，但避免了 pnpm 的运行时依赖检查（会触发
+# pnpm install -> ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY）。
+# 也不需要 corepack 下载 pnpm，启动更快更稳定。
+exec su -s /bin/sh dsh -c "export HOME=/app && cd /app && exec node --import tsx/esm apps/cli/src/bin.ts web --patch /app/docker-patch.yml"
