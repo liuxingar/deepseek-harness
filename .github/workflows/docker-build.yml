@@ -84,25 +84,29 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/deepseek-harness:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/deepseek-harness:${{ github.ref_name }}
 
-      # 仅在「定时同步 + 有实际上游更新 + 构建成功」时发送邮件通知
-      - name: Send email notification
+      # 仅在「定时同步 + 有实际上游更新 + 构建成功」时发送 MeoW 通知
+      # （替代原邮件通知；通知失败不影响构建结果）
+      - name: Notify MeoW
         if: github.event_name == 'schedule' && steps.sync.outputs.updated == 'true' && steps.build.outcome == 'success'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.qq.com
-          server_port: 465
-          secure: true
-          username: 1175864173@qq.com
-          password: ${{ secrets.QQ_MAIL_PASSWORD }}
-          subject: "DeepSeek Harness 镜像更新构建成功"
-          to: 1175864173@qq.com
-          from: "GitHub Actions"
-          body: |
-            上游 deepseek-ai/deepseek-harness 有新更新，已自动同步并构建成功。
-
-            镜像地址：ghcr.io/liuxingar/deepseek-harness:latest
-            Commit：${{ github.sha }}
-            构建详情：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            群晖上执行以下命令升级：
-            docker compose pull && docker compose up -d
+        continue-on-error: true
+        run: |
+          node -e '
+            const payload = {
+              title: "DeepSeek Harness 镜像更新构建成功",
+              msg: "上游 deepseek-ai/deepseek-harness 有新更新，已自动同步并构建成功。\n"
+                + "镜像地址：ghcr.io/liuxingar/deepseek-harness:latest\n"
+                + "Commit：${{ github.sha }}\n"
+                + "构建详情：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n"
+                + "群晖上执行 docker compose pull && docker compose up -d 升级。"
+            };
+            fetch("https://api.chuckfang.com/shangzw", {
+              method: "POST",
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify(payload),
+            }).then(r => r.text()).then(t => {
+              console.log(t);
+              let ok = false;
+              try { ok = JSON.parse(t).status === 200; } catch {}
+              if (!ok) process.exit(1);
+            }).catch(e => { console.error(e); process.exit(1); });
+          '
