@@ -65,7 +65,7 @@ git push
 在你的 Fork 仓库主页，分支名旁边会出现 **Sync fork** 按钮（当上游有更新时），点 **Update branch**，push 到 master 后 Actions 自动构建新镜像。
 
 ### 方式 B：定时自动同步（全自动）
-工作流已配置每天北京时间 11:00 自动 `git merge upstream/master` 并构建。如果合并冲突，会跳过并发 warning，需要你手动处理。
+工作流已配置每天北京时间 05:00（UTC 21:00）自动 `git merge upstream/master` 并构建。如果合并冲突，会跳过并发 warning，需要你手动处理。
 
 > 注意：GitHub Actions 用 `GITHUB_TOKEN` push 不会再次触发工作流（防循环），所以定时任务里同步和构建在同一个 job 里完成。
 
