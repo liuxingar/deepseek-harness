@@ -37,6 +37,10 @@ RUN git init && \
 # （通过局域网 IP 访问时 settings 持久化强制为 host，否则模型设置页不可用）
 RUN python3 scripts/apply-lan-settings-patch.py
 
+# 应用 fork 专属补丁：支持 $DSH_LAN_URL 覆盖打印的登录 URL
+# （设置后日志直接打印可达地址，如 http://192.168.50.100:16200；未设置保持官方行为）
+RUN python3 scripts/apply-lan-url-patch.py
+
 # 安装依赖 + 构建
 RUN pnpm install --frozen-lockfile && pnpm run build
 

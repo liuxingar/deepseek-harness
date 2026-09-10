@@ -13,3 +13,19 @@
 - id: connection
   config:
     trustedHosts: !!js "[...(process.env.DSH_TRUSTED_HOSTS || '').split(',').map(s => s.trim()).filter(Boolean), ...ctx.webRuntime.trustedHosts]"
+
+# 3. 分离「参数配置」与「对话固化数据」的挂载路径
+#    参数配置（settings / .credentials.yaml / profiles）留在 DSH_HOME=/app/.dsh；
+#    会话历史 / 附件图片 / 投影缓存 重定向到第二个挂载卷 /data
+#    （在 docker-compose.yml 里挂 ${DSH_SESSIONS}:/data）。
+#    官方对应插件 schema：session-persistence-jsonl.root（必填）、
+#    attachment-local.dshHome、storage-json.root。
+- id: session-persistence-jsonl
+  config:
+    root: /data/sessions
+- id: attachment-local
+  config:
+    dshHome: /data
+- id: storage-json
+  config:
+    root: /data/storages
