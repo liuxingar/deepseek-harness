@@ -18,7 +18,13 @@ ENV HOME=/app
 
 # 启用 corepack 并锁定 pnpm 版本
 # 注意：如果上游 package.json 的 packageManager 字段升级了 pnpm，需同步更新此行
-RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
+# corepack 需联网下载 pnpm：偶发网络/TLS 抖动会让该步骤直接失败，故做有限重试（最多 3 次）
+RUN for i in 1 2 3; do \
+      corepack enable && corepack prepare pnpm@11.7.0 --activate && exit 0; \
+      echo "corepack prepare pnpm@11.7.0 failed (attempt $i/3), retrying in 5s" >&2; \
+      sleep 5; \
+    done; \
+    echo "corepack prepare pnpm@11.7.0 failed after 3 attempts" >&2; exit 1
 
 WORKDIR /app
 
@@ -56,7 +62,13 @@ RUN find /app -type d \( -name tests -o -name '__snapshots__' -o -name 'e2e' -o 
 # ---- 运行阶段（更小的最终镜像）----
 FROM node:22-slim
 
-RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
+# corepack 需联网下载 pnpm：偶发网络/TLS 抖动会让该步骤直接失败，故做有限重试（最多 3 次）
+RUN for i in 1 2 3; do \
+      corepack enable && corepack prepare pnpm@11.7.0 --activate && exit 0; \
+      echo "corepack prepare pnpm@11.7.0 failed (attempt $i/3), retrying in 5s" >&2; \
+      sleep 5; \
+    done; \
+    echo "corepack prepare pnpm@11.7.0 failed after 3 attempts" >&2; exit 1
 
 # 运行时仍需要 git（部分插件操作会用到）
 RUN apt-get update && \
