@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 同步官方上游 deepseek-ai/deepseek-harness 到本 fork，并保留 Docker 部署改动。
-# 原则：不改动官方源码文件——官方代码的少量修改在镜像构建时注入（scripts/apply-lan-settings-patch.py）。
+# 原则：官方源码零改动（不做任何构建期源码补丁）；$DSH_LAN_URL 由 entrypoint.sh
+# 通过官方 --public-url 传入，局域网 settings 由上游原生支持。
 # 用法：bash scripts/sync-upstream.sh
 # 流程：fetch upstream -> merge -> 自检关键改动 -> push fork -> 触发自动构建
 set -euo pipefail
@@ -32,7 +33,8 @@ else
   echo "本 fork 的改动清单见 docs/fork-maintenance.md，要点："
   echo "  - 新增的 docker 部署文件（Dockerfile/compose/patch 等）：保留"
   echo "  - 删除的官方 workflow（ci/release/e2e 等）：保持删除（git checkout --theirs 可一键保持删除）"
-  echo "  - 官方源码文件（如 ui-settings）保持官方原样，由构建时补丁注入，一般无需处理"
+  echo "  - 官方源码零改动：不做构建期源码补丁；局域网 settings 由上游 #4201 原生支持，"
+  echo "    登录 URL 由 entrypoint.sh 的 --public-url 传入，冲突时应保留官方版本"
   echo ""
   echo "处理完冲突后：git add -A && git commit，然后重新运行本脚本（或手动 push）"
   exit 1
@@ -55,19 +57,34 @@ else
   SELF_CHECK_OK=0
 fi
 
-# 4.2 官方源码保持原样（含 isLoopback 原逻辑），由构建时脚本注入
-if grep -q "ctx.remote.\$host.isLoopback ? 'host' : 'memory'" packages/client/ui-settings/src/client/index.ts; then
-  echo "  [OK] ui-settings 源码保持官方原样（构建时注入补丁）"
-else
-  echo "  [WARN] ui-settings 源码不含官方 isLoopback 原逻辑，可能已被改动，请检查"
+# 4.2 官方源码保持零改动（不再做任何构建期源码补丁）
+if grep -rq "apply-lan-" Dockerfile; then
+  echo "  [WARN] Dockerfile 仍在调用构建期源码补丁脚本（已弃用，应删除）"
   SELF_CHECK_OK=0
+else
+  echo "  [OK] Dockerfile 无构建期源码补丁"
 fi
 
-# 4.3 构建时补丁脚本与 Dockerfile 引用
-if [ -f scripts/apply-lan-settings-patch.py ] && grep -q "apply-lan-settings-patch.py" Dockerfile; then
-  echo "  [OK] 构建时补丁脚本已配置"
+# 4.3 上游已提供 $DSH_LAN_URL 所需的原生能力：
+#     a) 认证浏览器 settings 走 Host 持久化（2026-10-09 PR #4201）
+#     b) --public-url / printUrl（2026-09-30 a7c3ad99b）
+if grep -q "isLoopback ? 'host' : 'memory'" packages/client/ui-settings/src/client/index.ts; then
+  echo "  [WARN] ui-settings 又按 loopback 区分持久化（上游疑似回退 #4201），局域网 settings 可能失效"
+  SELF_CHECK_OK=0
 else
-  echo "  [WARN] scripts/apply-lan-settings-patch.py 或 Dockerfile 引用缺失"
+  echo "  [OK] ui-settings 已按认证浏览器统一持久化（#4201）"
+fi
+if grep -q "publicUrl" packages/bundle/web-app/src/index.ts \
+  && grep -q -- "--public-url" packages/bundle/web-app/src/startup.ts; then
+  echo "  [OK] web-app 原生支持 --public-url"
+else
+  echo "  [WARN] web-app 不再支持 --public-url，需重新评估 $DSH_LAN_URL 的实现方式"
+  SELF_CHECK_OK=0
+fi
+if grep -q -- "--public-url" entrypoint.sh; then
+  echo "  [OK] entrypoint.sh 通过 --public-url 传入 \$DSH_LAN_URL"
+else
+  echo "  [WARN] entrypoint.sh 未传 --public-url，启动日志将显示容器内网地址"
   SELF_CHECK_OK=0
 fi
 

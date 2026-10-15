@@ -22,6 +22,10 @@ services:
       # 保持 danger-full-access（无沙箱直接访问）即可；
       # 若用 workspace-write 会报 "no sandbox backend is usable"
       DSH_PERMISSION_MODE: ${DSH_PERMISSION_MODE:-danger-full-access}
+      # 容器被端口映射后的外部可达地址（浏览器实际访问的地址），例如
+      # http://192.168.50.100:16200。设置后启动日志、DSH_WEB_URL 与 agent
+      # 上下文都显示该地址（官方 --public-url）；留空则显示容器内网地址。
+      DSH_LAN_URL: ${DSH_LAN_URL:-}
     volumes:
       # agent 工作区（NAS 真实路径，在 .env 的 DSH_WORKSPACE 里配置）
       # 提示：dsh 通过 UI 目录选择器选工作目录，容器内请选择 /workspace

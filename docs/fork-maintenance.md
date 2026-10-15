@@ -1,7 +1,7 @@
 # Fork 维护指南（同步官方上游）
 
 本 fork（`liuxingar/deepseek-harness`）在官方 `deepseek-ai/deepseek-harness` 基础上做了 Docker/群晖部署相关改动。
-**原则：不改动官方源码文件**，所有部署改动都放在 fork 独有文件里，官方代码的少量修改在镜像构建时注入。
+**原则：官方源码零改动**，所有部署改动都放在 fork 独有文件里；早期那种「构建时给官方源码打补丁」的做法已全部弃用。
 
 ## 为什么需要维护
 
@@ -21,41 +21,42 @@ bash scripts/sync-upstream.sh
 ### 新增文件（官方没有，merge 时 git 自动保留，不会冲突）
 | 文件 | 作用 |
 |---|---|
-| `Dockerfile` | 镜像构建（群晖/通用 amd64+arm64），构建时调用补丁脚本 |
-| `docker-compose.yml` | 群晖部署编排 |
+| `Dockerfile` | 镜像构建（群晖/通用 amd64+arm64），基于官方源码零改动构建 |
+| `docker-compose.yml` | 群晖部署编排（含 `DSH_LAN_URL` 透传） |
 | `docker-patch.yml` | 运行配置：监听 0.0.0.0 + `/api` 信任围栏读环境变量 `DSH_TRUSTED_HOSTS` |
 | `.env.example` | 环境变量模板 |
 | `.dockerignore` | 构建排除 |
-| `.github/workflows/docker-build.yml` | 唯一保留的 CI：push 自动构建镜像到 GHCR + 可选发邮件 |
+| `.github/workflows/docker-build.yml` | 唯一保留的 CI：push 自动构建镜像到 GHCR + 可选发 MeoW 通知 |
 | `README-docker-setup.md` | 部署说明 |
 | `scripts/sync-upstream.sh` | 同步上游脚本 |
-| `scripts/apply-lan-settings-patch.py` | 构建时给官方源码打补丁（局域网 settings 修复） |
-| `entrypoint.sh` | 容器入口：启动时自动修正挂载卷属主（解决 NAS bind mount 目录 EACCES），再降权到 dsh 用户运行 |
+| `entrypoint.sh` | 容器入口：启动时自动修正挂载卷属主（解决 NAS bind mount 目录 EACCES），把 `$DSH_LAN_URL` 作为官方 `--public-url` 传入，再降权到 dsh 用户运行 |
 | `docs/fork-maintenance.md` | 本文档 |
 
 ### 删除的官方文件（用户要求去掉无关构建）
 官方原有一批 CI/发布 workflow（`ci.yml`、`e2e.yml`、`release*.yml`、`sandbox.yml`、`docs-pages.yml` 等）已删除，
 只保留 `docker-build.yml`。同步时若官方更新这些文件，git 可能报冲突，保持删除即可。
 
-### 官方源码修改（**不提交到 fork**，构建时注入）
-**官方源码文件保持原样**，仅有的改动通过 Dockerfile 构建时调用 `scripts/apply-lan-settings-patch.py` 注入：
+### 官方源码零改动（曾用构建期补丁，现已弃用）
 
-| 目标文件 | 注入内容 |
-|---|---|
-| `packages/client/ui-settings/src/client/index.ts` | 强制 settings 持久化为 `host`，使局域网（非 loopback）访问时模型/API key 配置可用 |
+两个构建期源码补丁脚本（`scripts/apply-lan-settings-patch.py`、`scripts/apply-lan-url-patch.py`）已删除，
+原因：官方已原生提供等价能力，逐字匹配官方源码的补丁会随上游重构反复失效（2026-10-03、2026-10-15 各一次失败）。
 
-> 背景：官方默认只在 loopback（127.0.0.1）访问时启用 settings 持久化；
-> 通过群晖局域网 IP 访问会降级为 memory 模式，报 "settings are unavailable in this browser"。
->
-> 优点：fork 源码与官方一致，同步上游时**不会**对这个文件产生冲突；
-> 构建时脚本精确替换，若官方重构该文件会明确报错提醒更新。
+| 原补丁目的 | 官方原生能力 | 现在的做法 |
+|---|---|---|
+| 局域网（非 loopback）访问时 settings 降级为 memory，模型设置页不可用 | 上游 2026-10-09 `23c29d067`（PR #4201）：**任何已认证浏览器**都通过 Host 文档持久化，不再按 loopback 区分 | 无需任何处理 |
+| 启动日志打印容器内网地址（如 172.26.0.2:3080），局域网打不开 | 上游 2026-09-30 `a7c3ad99b`：`--public-url` 指定对外广告地址（用于日志行、`DSH_WEB_URL`、agent 上下文） | `entrypoint.sh` 读取 `$DSH_LAN_URL` 后传 `--public-url`；未设置则不传，保持官方行为 |
+
+> 这样上游重构 `packages/client/ui-settings` 或 `packages/bundle/web-app` 时，构建不再失败。
 
 ## 同步后自检清单（sync-upstream.sh 自动执行）
 
 1. `docker-patch.yml` 存在，且 `!!js` 表达式是**双引号标量**（不是 flow 序列，否则启动失败）
-2. 官方源码 `ui-settings/index.ts` 保持原样（含 `isLoopback` 原逻辑），由构建时脚本注入修复
-3. `Dockerfile` 包含 `RUN python3 scripts/apply-lan-settings-patch.py` 和 `ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]`
-4. `.github/workflows/docker-build.yml` 存在（唯一保留的 CI）
+2. `Dockerfile` 不含任何构建期源码补丁调用（`apply-lan-*`）
+3. 上游仍具备两项原生能力：ui-settings 不再按 loopback 区分持久化；web-app 支持 `--public-url`（`startup.ts` + `index.ts`）
+4. `entrypoint.sh` 通过 `--public-url` 传入 `$DSH_LAN_URL`
+5. `.github/workflows/docker-build.yml` 存在（唯一保留的 CI）
+
+自检未通过时脚本会暂停推送（`exit 1`），需人工确认后再 `git add -A && git push origin master`。
 
 ## 群晖部署常见问题
 
@@ -69,3 +70,12 @@ bash scripts/sync-upstream.sh
 1. `COPY --from=builder --chown=dsh:dsh /app /app` 替代"复制后再 `chown -R /app`"——后者会产生与 COPY 层几乎一样大的额外镜像层
 2. 构建后清理运行时不需要的内容（tests/快照/e2e/website/docs/sourcemap/缓存）
 同步官方后重建镜像体积明显变小，pull 更快。
+
+### 启动日志里的 URL 是 172.x/容器内网地址，局域网打不开
+说明容器没拿到 `DSH_LAN_URL`。检查 `.env` 里是否设置（例如 `DSH_LAN_URL=http://192.168.50.100:16200`，
+即「宿主 IP + compose 里映射的宿主端口」），以及 `docker-compose.yml` 的 `environment` 是否透传该变量。
+设置后重新 `docker compose up -d`，启动日志的第一行 `dsh web: ...` 会变成该可达地址（自动带 `?token=...`）。
+
+### 构建失败为什么没人发现
+`docker-build.yml` 的 `Notify MeoW` 只在「定时同步 + 有上游更新 + 构建成功」时发通知。
+如需失败也通知，需要另加一个 `if: failure()` 的 MeoW 步骤。

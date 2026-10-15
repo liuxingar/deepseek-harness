@@ -55,7 +55,8 @@ jobs:
             find .github/workflows -type f ! -name 'docker-build.yml' -delete 2>/dev/null || true
             git add -A
             git diff --cached --quiet || git commit -m "chore: remove upstream workflows, keep only docker-build"
-            git push || echo "Nothing to push"
+            # 推送失败不要静默：此前 `|| echo "Nothing to push"` 会掩盖真实错误
+            git push || echo "::warning::push to origin/master failed; the build below still uses the local merge"
           else
             echo "updated=false" >> $GITHUB_OUTPUT
             echo "No new upstream commits, skip."
@@ -98,6 +99,33 @@ jobs:
                 + "Commit：${{ github.sha }}\n"
                 + "构建详情：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n"
                 + "群晖上执行 docker compose pull && docker compose up -d 升级。"
+            };
+            fetch("https://api.chuckfang.com/shangzw", {
+              method: "POST",
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify(payload),
+            }).then(r => r.text()).then(t => {
+              console.log(t);
+              let ok = false;
+              try { ok = JSON.parse(t).status === 200; } catch {}
+              if (!ok) process.exit(1);
+            }).catch(e => { console.error(e); process.exit(1); });
+          '
+
+      # 构建失败时也通知：此前只在成功时通知，2026-10-10~10-14 连挂 5 天无人知晓。
+      # 通知失败不影响构建结果。
+      - name: Notify MeoW on failure
+        if: failure()
+        continue-on-error: true
+        run: |
+          node -e '
+            const payload = {
+              title: "DeepSeek Harness 镜像构建失败",
+              msg: "自动构建失败，latest 镜像未更新（群晖仍为旧镜像）。\n"
+                + "触发方式：${{ github.event_name }}\n"
+                + "Commit：${{ github.sha }}\n"
+                + "构建详情：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n"
+                + "提示：先看失败步骤日志；镜像内已不做构建期源码补丁，若再因上游重构失败，多半是 Dockerfile / entrypoint.sh 需要适配。"
             };
             fetch("https://api.chuckfang.com/shangzw", {
               method: "POST",

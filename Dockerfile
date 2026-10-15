@@ -39,13 +39,12 @@ RUN git init && \
     git config user.name "build" && \
     git commit --allow-empty -m "snapshot"
 
-# 应用 fork 专属补丁：官方源码保持原样，仅在构建产物里注入局域网 settings 修复
-# （通过局域网 IP 访问时 settings 持久化强制为 host，否则模型设置页不可用）
-RUN python3 scripts/apply-lan-settings-patch.py
-
-# 应用 fork 专属补丁：支持 $DSH_LAN_URL 覆盖打印的登录 URL
-# （设置后日志直接打印可达地址，如 http://192.168.50.100:16200；未设置保持官方行为）
-RUN python3 scripts/apply-lan-url-patch.py
+# 官方源码零改动：fork 原先用构建期补丁脚本改官方源码，现已全部弃用——
+#   1) 局域网 settings 持久化：上游 2026-10-09 PR #4201 起，任何已认证浏览器
+#      都通过 Host 文档持久化（不再按 loopback 区分），无需补丁；
+#   2) 打印的登录 URL：改用官方 --public-url（a7c3ad99b 起支持），由
+#      entrypoint.sh 读取 $DSH_LAN_URL 传入，不再改 web-app 源码。
+# 好处：上游重构这些文件不再影响构建。
 
 # 安装依赖 + 构建
 RUN pnpm install --frozen-lockfile && pnpm run build
